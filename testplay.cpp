@@ -37,7 +37,7 @@ public:
 		vb->addWidget(le_serv);
 		le_url->setText("rtsp://media.real.com/showcase/marketing/rv10/mary_tori_amos_350k_320x.rmvb");
 		pb_stop->setEnabled(false);
-		vw->setFixedSize(320, 240);
+		vw->setMinimumSize(320, 240);
 		pb_play->setFocus();
 		le_serv->setReadOnly(true);
 
@@ -130,7 +130,7 @@ int main(int argc, char **argv)
 
 	QApplication app(argc, argv);
 
-	QString base = "/home/justin/cvs/neo/helix/cvs/splay2/release";
+	QString base = "/home/justin/cvs/neo/helix/cvs/splay3/release";
 	/*QString base;
 	const char *p = getenv("HELIX_LIBS");
 	if(p)
