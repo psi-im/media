@@ -1,0 +1,19 @@
+To build the helix plugin:
+
+  cd helix
+  vi helixplugin.pro    # change CS_BASE and HELIX_BASE to your system
+  qmake
+  make
+  cd ..
+
+To build the sample app:
+
+  vi testplay.cpp       # change main() to refer to same path as HELIX_BASE
+  qmake
+  make
+
+To run:
+
+  ./testplay
+  click the play button and watch some tori
+
