@@ -22,8 +22,8 @@ LIBS += \
 
 unix:{
 	QMAKE_CXXFLAGS += -march=pentium
+	QMAKE_CXXFLAGS += -include $$HELIX_BASE/clientapps/simpleplayer/rel/clientapps_simpleplayer_ribodefs.h
 }
 
-QMAKE_CXXFLAGS += -include $$HELIX_BASE/clientapps/simpleplayer/rel/clientapps_simpleplayer_ribodefs.h
 #QMAKE_CXXFLAGS += -include ../cvs/prod/producersdk/sdksamples/encoder/rel/producersdk_sdksamples_encoder_ribodefs.h
 

@@ -8,11 +8,6 @@
 #include <qlibrary.h>
 #include <qfile.h>
 
-#ifdef Q_WS_X11
-#include <X11/Xlib.h>
-#include <X11/extensions/XShm.h>
-#endif
-
 #include "hxengin.h"
 #include "hxcore.h"
 #include "hxtypes.h"
@@ -29,7 +24,11 @@
 #include "hxprefs.h"
 #include "hxstrutl.h"
 
+#include "manager.h"
 #include "helixinterfaces.h"
+
+extern IHXSite* siteHXSite;
+extern QWidget *siteWidget;
 
 #define GUID_LEN 64
 
@@ -66,7 +65,7 @@ public:
 	MP_Client *createClient();
 	MP_Server *createServer();
 
-	HelixManager *manager;
+	Manager *manager;
 	QLibrary *clientLib;
 	FPRMCREATEENGINE     CreateEngine;
 	FPRMCLOSEENGINE      CloseEngine;
@@ -84,137 +83,6 @@ MediaPlugin *createPlugin()
 	return new HelixPlugin;
 }
 
-//----------------------------------------------------------------------------
-// HelixManager
-//----------------------------------------------------------------------------
-class HelixManager : public QObject
-{
-	Q_OBJECT
-public:
-	HelixPlugin *plugin;
-	QTimer helixTimer, xTimer;
-	bool xshm_present;
-	int xshm_event_base;
-	Display *disp;
-
-	HelixManager(HelixPlugin *p)
-	{
-		plugin = p;
-		disp = 0;
-		xshm_present = false;
-
-		connect(&helixTimer, SIGNAL(timeout()), SLOT(t_helix()));
-		connect(&xTimer, SIGNAL(timeout()), SLOT(t_x()));
-	}
-
-	void startHelix()
-	{
-		if(!helixTimer.isActive())
-			helixTimer.start(20);
-	}
-
-	void stopHelix()
-	{
-		helixTimer.stop();
-	}
-
-	void startXHandling(Display *_disp)
-	{
-		if(!xTimer.isActive())
-		{
-			disp = _disp;
-			int ignore;
-			xshm_present = XQueryExtension(disp, "MIT-SHM", &ignore, &xshm_event_base, &ignore);
-			xTimer.start(10);
-		}
-	}
-
-	void stopXHandling()
-	{
-		xTimer.stop();
-		disp = 0;
-		xshm_present = false;
-	}
-
-private slots:
-	void t_helix()
-	{
-		plugin->clientEngine->EventOccurred(NULL);
-	}
-
-	void t_x()
-	{
-		XEvent xevent;
-		int x_event_available;
-
-		memset(&xevent, 0, sizeof(xevent));
-
-		do
-		{
-			XLockDisplay(disp);
-			x_event_available = XPending(disp);
-
-			if(x_event_available)
-			{
-				XNextEvent(disp, &xevent);
-			}
-			XUnlockDisplay(disp);
-
-			if (x_event_available)
-			{
-				XEvent* pXEvent = &xevent;
-				HXxEvent event;
-				HXxEvent* pEvent = &event;
-				if(pXEvent)
-				{
-					memset(&event, 0, sizeof(event));
-					event.event = pXEvent->type;
-					event.window = (void*)pXEvent->xany.window;
-					event.param1 = pXEvent->xany.display;
-					event.param2 = pXEvent;
-				}
-				else
-				{
-					pEvent = NULL;
-				}
-				plugin->clientEngine->EventOccurred(pEvent);
-
-				/* RGG: A helpful hint: If you're getting messages here
-				that aren't in the range of the core X events, an
-				X extension may be sending you events. You can look
-				for this extension using the command
-				"xdpyinfo -ext all" and by looking at the reported
-				"base event" number. */
-
-				/* Check the extensions */
-				if(xshm_present && (ShmCompletion + xshm_event_base) == xevent.type)
-				{
-					/* Ignore xshm completion */
-				}
-				else
-				{
-					//printf("Unhandled event type %d\n", xevent.type);
-				}
-			}
-		} while (x_event_available);
-	}
-};
-
-
-/*		if(siteHXSite) {
-			++n;
-			if(n == 50) { // 1 second
-				HXxSize size;
-				size.cx = 640;
-				size.cy = 480;
-				siteHXSite->SetSize(size);
-			}
-		}
-		if(!xt.isActive() && xdisp) {
-			xt.start(10);
-		}
-	}*/
-
 // used to show video output
 class HelixWidget : public QWidget
 {
@@ -222,14 +90,23 @@ class HelixWidget : public QWidget
 public:
 	HelixWidget(QWidget *parent=0, const char *name=0);
 
+	void adjustSiteSize();
+
+	QWidget *site;
+
 protected:
 	// reimplemented
 	void paintEvent(QPaintEvent *pe);
+	void resizeEvent(QResizeEvent *re);
 
 private:
 	class Private;
 	Private *d;
 };
+
+double vidAspect;
+int vidWidth = 320;
+int vidHeight = 220;
 
 //----------------------------------------------------------------------------
 // HelixWidget
@@ -237,12 +114,49 @@ private:
 HelixWidget::HelixWidget(QWidget *parent, const char *name)
 :QWidget(parent, name)
 {
+	vidAspect = (double)vidWidth / (double)vidHeight;
+
+	//site = new QWidget(this);
+	//site->hide();
 }
 
 void HelixWidget::paintEvent(QPaintEvent *pe)
 {
 	QPainter p(this);
 	p.fillRect(pe->rect(), Qt::black);
+}
+
+void HelixWidget::resizeEvent(QResizeEvent *)
+{
+	adjustSiteSize();
+}
+
+void HelixWidget::adjustSiteSize()
+{
+	//site->show();
+	if(siteHXSite)
+	{
+		int w = width();
+		int h = height();
+		double aspect = (double)w / (double)h;
+
+		int ow, oh;
+		if(aspect > vidAspect)
+		{
+			ow = h * vidAspect;
+			oh = h;
+		}
+		else
+		{
+			ow = w;
+			oh = w / vidAspect;
+		}
+
+		HXxSize size;
+		size.cx = ow;
+		size.cy = oh;
+		siteHXSite->SetSize(size);
+	}
 }
 
 
@@ -299,12 +213,6 @@ public:
 	{
 		if(player)
 		{
-#ifdef Q_WS_X11
-			Display *disp = client->display();
-			if(disp)
-				plugin->manager->stopXHandling();
-#endif
-
 			player->Stop();
 
 			printf("releasing client\n");
@@ -345,7 +253,7 @@ public:
 			return;
 		}
 
-		plugin->manager->startHelix();
+		plugin->manager->start();
 		printf("playing\n");
 	}
 
@@ -370,11 +278,8 @@ public:
 private slots:
 	void client_siteReady()
 	{
-#ifdef Q_WS_X11
-		Display *disp = client->display();
-		if(disp)
-			plugin->manager->startXHandling(client->display());
-#endif
+		printf("Site Ready\n");
+		((HelixWidget *)siteWidget)->adjustSiteSize();
 	}
 
 	void doLateError()
@@ -390,7 +295,7 @@ HelixPlugin::HelixPlugin()
 {
 	clientLib = 0;
 	clientEngine = 0;
-	manager = new HelixManager(this);
+	manager = 0;
 
 	printf("loaded\n");
 }
@@ -450,6 +355,7 @@ bool HelixPlugin::init(const QString &base)
 	}
 
 	printf("created client engine\n");
+	manager = new Manager(clientEngine);
 	return true;
 }
 

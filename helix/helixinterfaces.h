@@ -149,9 +149,6 @@ public:
 	// then you can call site() and display() to get the details.
 	void setWidget(QWidget *siteTarget);
 	IHXSite *site() const;
-#ifdef Q_WS_X11
-	Display *display() const;
-#endif
 
 signals:
 	void siteReady();

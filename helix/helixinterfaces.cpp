@@ -3,10 +3,13 @@
 #include "hxbuffer.h"
 #include "hxmangle.h"
 
+#include "manager.h"
+
 #include<X11/Xlib.h>
 QWidget *siteWidget = 0;
 IHXSite* siteHXSite = 0;
 HXxWindow *siteWin = 0;
+extern double aspect;
 
 //----------------------------------------------------------------------------
 // MyErrorSink
@@ -514,7 +517,6 @@ STDMETHODIMP MyAuthManager::HandleAuthenticationRequest(IHXAuthenticationManager
 //----------------------------------------------------------------------------
 // MySiteSupplier
 //----------------------------------------------------------------------------
-Display *xdisp = 0;
 MySiteSupplier::MySiteSupplier(IUnknown* _player)
 {
 	refs = 0;
@@ -620,14 +622,7 @@ STDMETHODIMP MySiteSupplier::SitesNeeded(UINT32 uRequestID, IHXValues* props)
     style = WS_OVERLAPPED | WS_VISIBLE | WS_CLIPCHILDREN;
 #endif
 
-	siteWin = new HXxWindow;
-	memset(siteWin, 0, sizeof(HXxWindow));
-	xdisp = XOpenDisplay(NULL);
-	if(xdisp)
-		siteWin->display = xdisp;
-	else
-		siteWin->display = qt_xdisplay();
-	siteWin->window = (void *)siteWidget->winId();
+	siteWin = Manager::singleton()->createWindow();
 	/*siteWin->x = 20;
 	siteWin->y = 40;
 	siteWin->width = 320;
@@ -637,8 +632,15 @@ STDMETHODIMP MySiteSupplier::SitesNeeded(UINT32 uRequestID, IHXValues* props)
 	siteWin->clipRect.top = 0;
 	siteWin->clipRect.bottom = 240;*/
 
-	printf("X Window = %p.\n",  siteWin->window);
-	printf("X Display = %p.\n", siteWin->display);
+	//printf("X Window = %p.\n",  siteWin->window);
+	//printf("X Display = %p.\n", siteWin->display);
+
+	siteWin->window = (void *)siteWidget->winId();
+	printf("Created Site Window\n");
+	printf("  Window ID = %p.\n",  siteWin->window);
+#ifdef Q_WS_X11
+	printf("  X Display = %p.\n", siteWin->display);
+#endif*/
 
     //hres = pSiteWindowed->Create(siteWin->window /*NULL*/, style);
     hres = siteWindowed->AttachWindow(siteWin);
@@ -716,11 +718,9 @@ STDMETHODIMP MySiteSupplier::SitesNotNeeded(UINT32 uRequestID)
 
     m_CreatedSites.RemoveKey((void*)uRequestID);
 
-    if(xdisp)
-    {
-    	XCloseDisplay(xdisp);
-	xdisp = 0;
-    }
+    Manager::singleton()->freeWindow(siteWin);
+    siteWin = 0;
+
     return HXR_OK;
 }
 
@@ -860,13 +860,6 @@ IHXSite *MyClient::site() const
 {
 	return siteHXSite;
 }
-
-#ifdef Q_WS_X11
-Display *MyClient::display() const
-{
-	return xdisp;
-}
-#endif
 
 void MyClient::siteChanged()
 {
