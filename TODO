@@ -1,0 +1,5 @@
+- better site support (don't use globals, allow resizing)
+- volume control
+- input/serving functionality
+- major cleanup
+
